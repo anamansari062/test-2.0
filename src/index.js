@@ -1,8 +1,10 @@
 import {
     address,
     appendTransactionMessageInstruction,
+    appendTransactionMessageInstructions,
     createKeyPairSignerFromBytes,
     createSolanaRpc,
+    getBase58Encoder,
     createSolanaRpcSubscriptions,
     createTransactionMessage,
     getSignatureFromTransaction,
@@ -15,22 +17,21 @@ import {
     setTransactionMessageLifetimeUsingBlockhash,
     signTransactionMessageWithSigners,
     getComputeUnitEstimateForTransactionMessageFactory,
-    SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE
+    SOLANA_ERROR__JSON_RPC__SERVER_ERROR_SEND_TRANSACTION_PREFLIGHT_FAILURE,
 } from '@solana/web3.js';
 import { getSystemErrorMessage, getTransferSolInstruction, isSystemError } from '@solana-program/system';
 import { getSetComputeUnitLimitInstruction, getSetComputeUnitPriceInstruction } from '@solana-program/compute-budget';
-import base58 from 'bs58';
 
 async function sendTransaction() {
 
-    const secretKey = "<your-secret-key>";
-    const toPubkey = address('<destination-address>');
-    const fromKeypair = await createKeyPairSignerFromBytes(
-        base58.decode(secretKey)
+    const destinationAddress = address('public-key-to-send-lamports-to');
+    const secretKey = "add-your-private-key";
+    const sourceKeypair = await createKeyPairSignerFromBytes(
+        getBase58Encoder().encode(secretKey)
     );
 
-    const rpc_url = "https://mainnet.helius-rpc.com/?api-key=<your-api-key>";
-    const wss_url = "wss://mainnet.helius-rpc.com/?api-key=<your-api-key>";
+    const rpc_url = "https://mainnet.helius-rpc.com/?api-key=<api-key>";
+    const wss_url = "wss://mainnet.helius-rpc.com/?api-key=<api-key>";
 
     const rpc = createSolanaRpc(rpc_url);
     const rpcSubscriptions = createSolanaRpcSubscriptions(wss_url);
@@ -47,14 +48,14 @@ async function sendTransaction() {
 
     const instruction = getTransferSolInstruction({
         amount: lamports(1),
-        destination: toPubkey,
-        source: fromKeypair,
+        destination: destinationAddress,
+        source: sourceKeypair,
     });
 
     const transactionMessage = pipe(
         createTransactionMessage({ version: 0 }),
         tx => (
-            setTransactionMessageFeePayer(fromKeypair.address, tx)
+            setTransactionMessageFeePayer(sourceKeypair.address, tx)
         ),
         tx => (
             setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, tx)
@@ -115,33 +116,15 @@ async function sendTransaction() {
      */
     const { value: finalLatestBlockhash } = await rpc.getLatestBlockhash({ commitment: 'confirmed' }).send();
 
-    const finalTransactionMessage = pipe(
-        createTransactionMessage({ version: 0 }),
-        tx => (
-            setTransactionMessageFeePayer(fromKeypair.address, tx)
-        ),
-        tx => (
-            setTransactionMessageLifetimeUsingBlockhash(finalLatestBlockhash, tx)
-        ),
-        tx => (
-            appendTransactionMessageInstruction(
-                getSetComputeUnitPriceInstruction({ microLamports: priorityFee }),
-                tx,
-            )
-        ),
-        tx => (
-            appendTransactionMessageInstruction(
-                getSetComputeUnitLimitInstruction({ units: computeUnitsEstimate }),
-                tx,
-            )
-        ),
-        tx =>
-        appendTransactionMessageInstruction(
-            instruction,
-            tx,
-        ),
-
+    const finalTransactionMessage = appendTransactionMessageInstructions(
+        [  
+            getSetComputeUnitPriceInstruction({ microLamports: priorityFee }), 
+            getSetComputeUnitLimitInstruction({ units: computeUnitsEstimate }) 
+        ],
+        transactionMessage,
     );
+
+    setTransactionMessageLifetimeUsingBlockhash(finalLatestBlockhash, finalTransactionMessage);
 
     const finalSignedTransaction = await signTransactionMessageWithSigners(finalTransactionMessage);
     console.log("Rebuilded the transaction and signed it");

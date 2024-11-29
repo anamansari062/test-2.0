@@ -15,10 +15,9 @@
         "ts-node": "^10.7.0"
     },
     "dependencies": {
-        "@solana-program/compute-budget": "^0.6.0",
-        "@solana-program/system": "^0.6.1",
-        "@solana/web3.js": "^2.0.0-rc.4",
-        "bs58": "^6.0.0",
+        "@solana-program/compute-budget": "^0.6.1",
+        "@solana-program/system": "^0.6.2",
+        "@solana/web3.js": "2.0",
         "typescript": "^5.6.3"
     }
 }
